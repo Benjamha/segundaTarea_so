@@ -3,6 +3,6 @@
 using namespace std;
 
 int main(){
-    cout << "Torneo Komikan";
+    cout << "Torneo Komikan.";
     return 0;
 }
