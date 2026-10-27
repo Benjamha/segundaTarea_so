@@ -1,5 +1,0 @@
-torneo: torneo.cpp
-	g++ -Wall -Wextra -std=c++17 -pthread -o tarea2SO main.cpp
-
-clean:
-	rm -f tarea2SO
