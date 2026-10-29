@@ -2,6 +2,8 @@
 #include <fstream>
 #include <string>
 #include <cstdlib>
+#include <fstream>
+#include <string>
 
 using namespace std;
 
@@ -57,6 +59,37 @@ void mostrarTablero(Tablero &tablero)
     }
 }
 
+int espera_min = 50;
+int espera_max = 300;
+int semilla = 1;
+
+void leer_configuracion(string nombre_archivo)
+{
+    ifstream archivo(nombre_archivo);
+    if (!archivo)
+    {
+        cout << "No se pudo abrir " << nombre_archivo << endl;
+        exit(1);
+    }
+
+    string palabra;
+    while (archivo >> palabra)
+    {
+        if (palabra == "retardo_min")
+        {
+            archivo >> espera_min;
+        }
+        else if (palabra == "retardo_max")
+        {
+            archivo >> espera_max;
+        }
+        else if (palabra == "seed")
+        {
+            archivo >> semilla;
+        }
+    }
+}
+
 int main(int argc, char *argv[])
 {
     if (argc < 3)
@@ -67,8 +100,18 @@ int main(int argc, char *argv[])
 
     int jugadores = atoi(argv[1]);
     int mesas = atoi(argv[2]);
+    if (argc >= 4)
+    {
+        leer_configuracion(argv[3]);
+    }
 
     cout << "jugadores: " << jugadores << endl;
     cout << "mesas: " << mesas << endl;
+    cout << "Espera: " << espera_min << " a " << espera_max << " ms" << endl;
+    cout << "Semilla: " << semilla << endl;
+
+    Tablero tablero;
+    iniciarTablero(tablero);
+    mostrarTablero(tablero);
     return 0;
 }
