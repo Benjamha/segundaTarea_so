@@ -18,7 +18,7 @@ struct Tablero
 {
     char casillas[FILAS][COLUMNAS];
     pthread_mutex_t candado;
-    int pumaFila, puma_col;
+    int pumaFila, pumaCol;
     int perroFila[NUM_PERROS];
     int perroCol[NUM_PERROS];
     bool perroVivo[NUM_PERROS];
@@ -59,7 +59,7 @@ void iniciarTablero(Tablero &tablero)
             if (tablero.casillas[fila][col] == 'P')
             {
                 tablero.pumaFila = fila;
-                tablero.puma_col = col;
+                tablero.pumaCol = col;
             }
             if (tablero.casillas[fila][col] == 'D' && n < NUM_PERROS)
             {
@@ -155,6 +155,65 @@ bool moverPerro(Tablero &tablero, int i, int d)
     tablero.casillas[nuevaFila][nuevaCol] = 'D';
     tablero.perroFila[i] = nuevaFila;
     tablero.perroCol[i] = nuevaCol;
+    return true;
+}
+
+bool hayPerro(Tablero &tablero, int fila, int col)
+{
+    if (fila < 0 || fila >= FILAS || col < 0 || col >= COLUMNAS)
+    {
+        return false;
+    }
+    return tablero.casillas[fila][col] == 'D';
+}
+
+bool moverPuma(Tablero &tablero, int d)
+{
+    int nuevaFila = tablero.pumaFila + DF[d];
+    int nuevaCol = tablero.pumaCol + DC[d];
+
+    if (!casillaLibre(tablero, nuevaFila, nuevaCol))
+    {
+        return false;
+    }
+
+    tablero.casillas[tablero.pumaFila][tablero.pumaCol] = '.';
+    tablero.casillas[nuevaFila][nuevaCol] = 'P';
+    tablero.pumaFila = nuevaFila;
+    tablero.pumaCol = nuevaCol;
+    return true;
+}
+
+bool capturarPerro(Tablero &tablero, int d)
+{
+    int filaPerro = tablero.pumaFila + DF[d];
+    int colPerro = tablero.pumaCol + DC[d];
+    int filaDestino = filaPerro + DF[d];
+    int colDestino = colPerro + DC[d];
+
+    if (!hayPerro(tablero, filaPerro, colPerro))
+    {
+        return false;
+    }
+    if (!casillaLibre(tablero, filaDestino, colDestino))
+    {
+        return false;
+    }
+
+    for (int i = 0; i < NUM_PERROS; i++)
+    {
+        if (tablero.perroVivo[i] && tablero.perroFila[i] == filaPerro && tablero.perroCol[i] == colPerro)
+        {
+            tablero.perroVivo[i] = false;
+        }
+    }
+
+    tablero.casillas[filaPerro][colPerro] = '.';
+    tablero.casillas[tablero.pumaFila][tablero.pumaCol] = '.';
+    tablero.casillas[filaDestino][colDestino] = 'P';
+    tablero.pumaFila = filaDestino;
+    tablero.pumaCol = colDestino;
+    tablero.capturados++;
     return true;
 }
 
