@@ -107,8 +107,8 @@ int main(int argc, char *argv[])
 
     cout << "jugadores: " << jugadores << endl;
     cout << "mesas: " << mesas << endl;
-    cout << "Espera: " << espera_min << " a " << espera_max << " ms" << endl;
-    cout << "Semilla: " << semilla << endl;
+    cout << "espera: " << espera_min << " a " << espera_max << " ms" << endl;
+    cout << "semilla: " << semilla << endl;
 
     Tablero tablero;
     iniciarTablero(tablero);
