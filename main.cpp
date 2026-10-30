@@ -217,6 +217,44 @@ bool capturarPerro(Tablero &tablero, int d)
     return true;
 }
 
+bool pumaAcorralado(Tablero &tablero)
+{
+    for (int d = 0; d < 4; d++)
+    {
+        int fila = tablero.pumaFila + DF[d];
+        int col = tablero.pumaCol + DC[d];
+
+        if (casillaLibre(tablero, fila, col))
+        {
+            return false;
+        }
+        if (hayPerro(tablero, fila, col) && casillaLibre(tablero, fila + DF[d], col + DC[d]))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+void revisarVictoria(Tablero &tablero)
+{
+    if (tablero.capturados >= 6)
+    {
+        tablero.terminado = true;
+        tablero.ganador = "Puma";
+    }
+    else if (pumaAcorralado(tablero))
+    {
+        tablero.terminado = true;
+        tablero.ganador = "Perros";
+    }
+    else if (tablero.movimientos >= MAX_MOVIMIENTOS)
+    {
+        tablero.terminado = true;
+        tablero.ganador = "Empate";
+    }
+}
+
 int main(int argc, char *argv[])
 {
     if (argc < 3)
