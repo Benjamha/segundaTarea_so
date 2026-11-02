@@ -5,6 +5,7 @@
 #include <fstream>
 #include <string>
 #include <pthread.h>
+#include <unistd.h>
 
 using namespace std;
 
@@ -255,6 +256,95 @@ void revisarVictoria(Tablero &tablero)
     }
 }
 
+struct Datos
+{
+    Tablero *tablero;
+    int numero;
+    unsigned int semilla;
+};
+
+void esperar(Datos *datos)
+{
+    int espera = espera_min + rand_r(&datos->semilla) % (espera_max - espera_min + 1);
+    usleep(espera * 1000);
+}
+
+void *hiloPuma(void *arg)
+{
+    Datos *datos = (Datos *)arg;
+    Tablero &tablero = *datos->tablero;
+
+    while (true)
+    {
+        esperar(datos);
+
+        pthread_mutex_lock(&tablero.candado);
+        if (tablero.terminado)
+        {
+            pthread_mutex_unlock(&tablero.candado);
+            break;
+        }
+
+        bool movio = false;
+        for (int d = 0; d < 4 && !movio; d++)
+        {
+            movio = capturarPerro(tablero, d);
+            if (movio)
+            {
+                cout << "el puma captura un perro" << endl;
+            }
+        }
+        if (!movio)
+        {
+            int d = rand_r(&datos->semilla) % 4;
+            movio = moverPuma(tablero, d);
+            if (movio)
+            {
+                cout << "El puma se mueve" << endl;
+            }
+        }
+
+        if (movio)
+        {
+            tablero.movimientos++;
+            mostrarTablero(tablero);
+            revisarVictoria(tablero);
+        }
+        pthread_mutex_unlock(&tablero.candado);
+    }
+    return NULL;
+}
+
+void *hiloPerro(void *arg)
+{
+    Datos *datos = (Datos *)arg;
+    Tablero &tablero = *datos->tablero;
+    int i = datos->numero - 1;
+
+    while (true)
+    {
+        esperar(datos);
+
+        pthread_mutex_lock(&tablero.candado);
+        if (tablero.terminado || !tablero.perroVivo[i])
+        {
+            pthread_mutex_unlock(&tablero.candado);
+            break;
+        }
+
+        int d = rand_r(&datos->semilla) % 4;
+        if (moverPerro(tablero, i, d))
+        {
+            tablero.movimientos++;
+            cout << "El perro " << i + 1 << " se mueve" << endl;
+            mostrarTablero(tablero);
+            revisarVictoria(tablero);
+        }
+        pthread_mutex_unlock(&tablero.candado);
+    }
+    return NULL;
+}
+
 int main(int argc, char *argv[])
 {
     if (argc < 3)
@@ -278,5 +368,33 @@ int main(int argc, char *argv[])
     Tablero tablero;
     iniciarTablero(tablero);
     mostrarTablero(tablero);
+
+    pthread_t hilos[NUM_PERROS + 1];
+    Datos datos[NUM_PERROS + 1];
+
+    for (int k = 0; k < NUM_PERROS + 1; k++)
+    {
+        datos[k].tablero = &tablero;
+        datos[k].numero = k;
+        datos[k].semilla = semilla + k;
+        if (k == 0)
+        {
+            pthread_create(&hilos[k], NULL, hiloPuma, &datos[k]);
+        }
+        else
+        {
+            pthread_create(&hilos[k], NULL, hiloPerro, &datos[k]);
+        }
+    }
+
+    for (int k = 0; k < NUM_PERROS + 1; k++)
+    {
+        pthread_join(hilos[k], NULL);
+    }
+
+    cout << "fin de la partida. Ganador:" << tablero.ganador << endl;
+    cout << "perros capturados: " << tablero.capturados << endl;
+
+    pthread_mutex_destroy(&tablero.candado);
     return 0;
 }
