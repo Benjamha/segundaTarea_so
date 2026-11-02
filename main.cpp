@@ -27,6 +27,7 @@ struct Tablero
     int movimientos;
     bool terminado;
     string ganador;
+    int id;
 };
 
 void iniciarTablero(Tablero &tablero)
@@ -95,6 +96,23 @@ void mostrarTablero(Tablero &tablero)
         }
         cout << endl;
     }
+}
+
+pthread_mutex_t candado_pantalla = PTHREAD_MUTEX_INITIALIZER;
+
+void escribir(Tablero &tablero, string mensaje)
+{
+    pthread_mutex_lock(&candado_pantalla);
+    cout << "[Mesa " << tablero.id << "] " << mensaje << endl;
+    pthread_mutex_unlock(&candado_pantalla);
+}
+
+void mostrarJugada(Tablero &tablero, string mensaje)
+{
+    pthread_mutex_lock(&candado_pantalla);
+    cout << "[Mesa " << tablero.id << "] " << mensaje << endl;
+    mostrarTablero(tablero);
+    pthread_mutex_unlock(&candado_pantalla);
 }
 
 int espera_min = 50;
@@ -284,14 +302,14 @@ void *hiloPuma(void *arg)
             pthread_mutex_unlock(&tablero.candado);
             break;
         }
-
         bool movio = false;
+        string mensaje = "";
         for (int d = 0; d < 4 && !movio; d++)
         {
             movio = capturarPerro(tablero, d);
             if (movio)
             {
-                cout << "el puma captura un perro" << endl;
+                mensaje = "El puma captura un perro";
             }
         }
         if (!movio)
@@ -300,14 +318,14 @@ void *hiloPuma(void *arg)
             movio = moverPuma(tablero, d);
             if (movio)
             {
-                cout << "El puma se mueve" << endl;
+                mensaje = "El puma se mueve";
             }
         }
 
         if (movio)
         {
             tablero.movimientos++;
-            mostrarTablero(tablero);
+            mostrarJugada(tablero, mensaje);
             revisarVictoria(tablero);
         }
         pthread_mutex_unlock(&tablero.candado);
@@ -336,12 +354,46 @@ void *hiloPerro(void *arg)
         if (moverPerro(tablero, i, d))
         {
             tablero.movimientos++;
-            cout << "El perro " << i + 1 << " se mueve" << endl;
-            mostrarTablero(tablero);
+            mostrarJugada(tablero, "El perro " + to_string(i + 1) + " se mueve");
             revisarVictoria(tablero);
         }
         pthread_mutex_unlock(&tablero.candado);
     }
+    return NULL;
+}
+
+void *hiloJuez(void *arg)
+{
+    Tablero *tablero = (Tablero *)arg;
+    iniciarTablero(*tablero);
+    mostrarJugada(*tablero, "Comienza la partida");
+
+    pthread_t hilos[NUM_PERROS + 1];
+    Datos datos[NUM_PERROS + 1];
+
+    for (int k = 0; k < NUM_PERROS + 1; k++)
+    {
+        datos[k].tablero = tablero;
+        datos[k].numero = k;
+        datos[k].semilla = semilla + tablero->id * 100 + k;
+        if (k == 0)
+        {
+            pthread_create(&hilos[k], NULL, hiloPuma, &datos[k]);
+        }
+        else
+        {
+            pthread_create(&hilos[k], NULL, hiloPerro, &datos[k]);
+        }
+    }
+
+    for (int k = 0; k < NUM_PERROS + 1; k++)
+    {
+        pthread_join(hilos[k], NULL);
+    }
+
+    escribir(*tablero, "Fin de la partida. Ganador: " + tablero->ganador + ". Perros capturados: " + to_string(tablero->capturados));
+
+    pthread_mutex_destroy(&tablero->candado);
     return NULL;
 }
 
@@ -366,35 +418,7 @@ int main(int argc, char *argv[])
     cout << "semilla: " << semilla << endl;
 
     Tablero tablero;
-    iniciarTablero(tablero);
-    mostrarTablero(tablero);
-
-    pthread_t hilos[NUM_PERROS + 1];
-    Datos datos[NUM_PERROS + 1];
-
-    for (int k = 0; k < NUM_PERROS + 1; k++)
-    {
-        datos[k].tablero = &tablero;
-        datos[k].numero = k;
-        datos[k].semilla = semilla + k;
-        if (k == 0)
-        {
-            pthread_create(&hilos[k], NULL, hiloPuma, &datos[k]);
-        }
-        else
-        {
-            pthread_create(&hilos[k], NULL, hiloPerro, &datos[k]);
-        }
-    }
-
-    for (int k = 0; k < NUM_PERROS + 1; k++)
-    {
-        pthread_join(hilos[k], NULL);
-    }
-
-    cout << "fin de la partida. Ganador:" << tablero.ganador << endl;
-    cout << "perros capturados: " << tablero.capturados << endl;
-
-    pthread_mutex_destroy(&tablero.candado);
+    tablero.id = 1;
+    hiloJuez(&tablero);
     return 0;
 }
