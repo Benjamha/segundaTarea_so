@@ -120,6 +120,7 @@ void mostrarJugada(Tablero &tablero, string mensaje)
 }
 
 int espera_min = 50;
+int prob_abandono = 0;
 int espera_max = 300;
 int semilla = 1;
 sem_t sem_mesas;
@@ -150,6 +151,10 @@ void leer_configuracion(string nombre_archivo)
         else if (palabra == "seed")
         {
             archivo >> semilla;
+        }
+        else if (palabra == "abandono")
+        {
+            archivo >> prob_abandono;
         }
     }
 }
@@ -310,6 +315,14 @@ void *hiloPuma(void *arg)
             pthread_mutex_unlock(&tablero.candado);
             break;
         }
+        if (rand_r(&datos->semilla) % 1000 < prob_abandono)
+        {
+            tablero.terminado = true;
+            tablero.ganador = "Perros (abandono del puma)";
+            pthread_mutex_unlock(&tablero.candado);
+            escribir(tablero, "El jugador puma abandona la partida");
+            break;
+        }
         bool movio = false;
         string mensaje = "";
         for (int d = 0; d < 4 && !movio; d++)
@@ -356,9 +369,22 @@ void *hiloPerro(void *arg)
         esperar(datos);
 
         pthread_mutex_lock(&tablero.candado);
+        if (cortar)
+        {
+            tablero.terminado = true;
+        }
         if (tablero.terminado || !tablero.perroVivo[i])
         {
             pthread_mutex_unlock(&tablero.candado);
+            break;
+        }
+
+        if (rand_r(&datos->semilla) % 1000 < prob_abandono)
+        {
+            tablero.terminado = true;
+            tablero.ganador = "Puma (abandono de los perros)";
+            pthread_mutex_unlock(&tablero.candado);
+            escribir(tablero, "El jugador de los perros abandona la partida");
             break;
         }
 
@@ -370,10 +396,6 @@ void *hiloPerro(void *arg)
             revisarVictoria(tablero);
         }
         pthread_mutex_unlock(&tablero.candado);
-        if (cortar)
-        {
-            tablero.terminado = true;
-        }
     }
     return NULL;
 }
@@ -405,10 +427,10 @@ void *hiloJuez(void *arg)
     for (int k = 0; k < NUM_PERROS + 1; k++)
     {
         pthread_join(hilos[k], NULL);
-        if (tablero->ganador == "")
-        {
-            tablero->ganador = "Ninguno (interrumpida)";
-        }
+    }
+    if (tablero->ganador == "")
+    {
+        tablero->ganador = "Ninguno (interrumpida)";
     }
 
     escribir(*tablero, "Fin de la partida. Ganador: " + tablero->ganador + ". Perros capturados: " + to_string(tablero->capturados));
