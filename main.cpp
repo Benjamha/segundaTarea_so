@@ -6,6 +6,10 @@
 #include <string>
 #include <pthread.h>
 #include <unistd.h>
+#include <semaphore.h>
+#include <csignal>
+#include <ctime>
+#include <vector>
 
 using namespace std;
 
@@ -118,6 +122,10 @@ void mostrarJugada(Tablero &tablero, string mensaje)
 int espera_min = 50;
 int espera_max = 300;
 int semilla = 1;
+sem_t sem_mesas;
+sem_t sem_pumas;
+sem_t sem_perros;
+volatile sig_atomic_t cortar = 0;
 
 void leer_configuracion(string nombre_archivo)
 {
@@ -394,7 +402,50 @@ void *hiloJuez(void *arg)
     escribir(*tablero, "Fin de la partida. Ganador: " + tablero->ganador + ". Perros capturados: " + to_string(tablero->capturados));
 
     pthread_mutex_destroy(&tablero->candado);
+    sem_post(&sem_mesas);
     return NULL;
+}
+
+struct Cliente
+{
+    int numero;
+    unsigned int semilla;
+};
+
+void *hiloCliente(void *arg)
+{
+    Cliente *cliente = (Cliente *)arg;
+    usleep(rand_r(&cliente->semilla) % 200 * 1000);
+
+    if (cliente->numero % 2 == 0)
+    {
+        sem_post(&sem_pumas);
+    }
+    else
+    {
+        sem_post(&sem_perros);
+    }
+    return NULL;
+}
+
+bool esperarSem(sem_t *sem)
+{
+    while (!cortar)
+    {
+        timespec limite;
+        clock_gettime(CLOCK_REALTIME, &limite);
+        limite.tv_nsec += 100000000;
+        if (limite.tv_nsec >= 1000000000)
+        {
+            limite.tv_sec++;
+            limite.tv_nsec -= 1000000000;
+        }
+        if (sem_timedwait(sem, &limite) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 int main(int argc, char *argv[])
@@ -407,6 +458,11 @@ int main(int argc, char *argv[])
 
     int jugadores = atoi(argv[1]);
     int mesas = atoi(argv[2]);
+    if (jugadores <= 0 || mesas <= 0)
+    {
+        cout << "N y M tienen que ser mayores que 0" << endl;
+        return 1;
+    }
     if (argc >= 4)
     {
         leer_configuracion(argv[3]);
@@ -416,9 +472,55 @@ int main(int argc, char *argv[])
     cout << "mesas: " << mesas << endl;
     cout << "espera: " << espera_min << " a " << espera_max << " ms" << endl;
     cout << "semilla: " << semilla << endl;
+    sem_init(&sem_mesas, 0, mesas);
+    sem_init(&sem_pumas, 0, 0);
+    sem_init(&sem_perros, 0, 0);
 
-    Tablero tablero;
-    tablero.id = 1;
-    hiloJuez(&tablero);
+    // llegan los clientes
+    vector<pthread_t> hilos_clientes(jugadores);
+    vector<Cliente> clientes(jugadores);
+    for (int k = 0; k < jugadores; k++)
+    {
+        clientes[k].numero = k;
+        clientes[k].semilla = semilla + k;
+        pthread_create(&hilos_clientes[k], NULL, hiloCliente, &clientes[k]);
+    }
+
+    // matchmaker: arma parejas y les da una mesa
+    int parejas = jugadores / 2;
+    vector<Tablero> tableros(parejas);
+    vector<pthread_t> jueces(parejas);
+    int creadas = 0;
+
+    for (int p = 0; p < parejas; p++)
+    {
+        if (!esperarSem(&sem_pumas))
+            break;
+        if (!esperarSem(&sem_perros))
+            break;
+        if (!esperarSem(&sem_mesas))
+            break;
+
+        tableros[p].id = p + 1;
+        pthread_create(&jueces[p], NULL, hiloJuez, &tableros[p]);
+        creadas++;
+    }
+
+    // esperar que termine todo
+    for (int p = 0; p < creadas; p++)
+    {
+        pthread_join(jueces[p], NULL);
+    }
+    for (int k = 0; k < jugadores; k++)
+    {
+        pthread_join(hilos_clientes[k], NULL);
+    }
+
+    sem_destroy(&sem_mesas);
+    sem_destroy(&sem_pumas);
+    sem_destroy(&sem_perros);
+    pthread_mutex_destroy(&candado_pantalla);
+
+    cout << "Torneo terminado" << endl;
     return 0;
 }
