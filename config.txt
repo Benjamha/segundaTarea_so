@@ -1,0 +1,4 @@
+retardo_min 10
+retardo_max 50
+seed 42
+abandono 0
