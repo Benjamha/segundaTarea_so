@@ -16,6 +16,9 @@ using namespace std;
 const int FILAS = 7;
 const int COLUMNAS = 5;
 
+bool hay_tablero = false;
+char tablero_config[FILAS][COLUMNAS];
+
 const int NUM_PERROS = 12;
 const int MAX_MOVIMIENTOS = 2000;
 
@@ -58,6 +61,20 @@ void iniciarTablero(Tablero &tablero)
     tablero.casillas[4][0] = 'D';
     tablero.casillas[4][4] = 'D';
     int n = 0;
+    for (int i = 0; i < NUM_PERROS; i++)
+    {
+        tablero.perroVivo[i] = false;
+    }
+    if (hay_tablero)
+    {
+        for (int fila = 0; fila < FILAS; fila++)
+        {
+            for (int col = 0; col < COLUMNAS; col++)
+            {
+                tablero.casillas[fila][col] = tablero_config[fila][col];
+            }
+        }
+    }
     for (int fila = 0; fila < FILAS; fila++)
     {
         for (int col = 0; col < COLUMNAS; col++)
@@ -155,6 +172,44 @@ void leer_configuracion(string nombre_archivo)
         else if (palabra == "abandono")
         {
             archivo >> prob_abandono;
+        }
+        else if (palabra == "tablero")
+        {
+            for (int fila = 0; fila < FILAS; fila++)
+            {
+                string texto;
+                archivo >> texto;
+                if ((int)texto.length() < COLUMNAS)
+                {
+                    cout << "la fila " << fila << " del tablero es muy corta" << endl;
+                    exit(1);
+                }
+                for (int col = 0; col < COLUMNAS; col++)
+                {
+                    tablero_config[fila][col] = texto[col];
+                }
+            }
+            hay_tablero = true;
+        }
+    }
+    if (hay_tablero)
+    {
+        int pumas = 0;
+        int perros = 0;
+        for (int fila = 0; fila < FILAS; fila++)
+        {
+            for (int col = 0; col < COLUMNAS; col++)
+            {
+                if (tablero_config[fila][col] == 'P')
+                    pumas++;
+                if (tablero_config[fila][col] == 'D')
+                    perros++;
+            }
+        }
+        if (pumas != 1 || perros > NUM_PERROS)
+        {
+            cout << "El tablero debe tener 1 puma y maximo 12 perros" << endl;
+            exit(1);
         }
     }
 }
@@ -310,6 +365,10 @@ void *hiloPuma(void *arg)
         esperar(datos);
 
         pthread_mutex_lock(&tablero.candado);
+        if (cortar)
+        {
+            tablero.terminado = true;
+        }
         if (tablero.terminado)
         {
             pthread_mutex_unlock(&tablero.candado);
@@ -350,10 +409,6 @@ void *hiloPuma(void *arg)
             revisarVictoria(tablero);
         }
         pthread_mutex_unlock(&tablero.candado);
-        if (cortar)
-        {
-            tablero.terminado = true;
-        }
     }
     return NULL;
 }
