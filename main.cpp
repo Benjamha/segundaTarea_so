@@ -337,6 +337,10 @@ void *hiloPuma(void *arg)
             revisarVictoria(tablero);
         }
         pthread_mutex_unlock(&tablero.candado);
+        if (cortar)
+        {
+            tablero.terminado = true;
+        }
     }
     return NULL;
 }
@@ -366,6 +370,10 @@ void *hiloPerro(void *arg)
             revisarVictoria(tablero);
         }
         pthread_mutex_unlock(&tablero.candado);
+        if (cortar)
+        {
+            tablero.terminado = true;
+        }
     }
     return NULL;
 }
@@ -397,6 +405,10 @@ void *hiloJuez(void *arg)
     for (int k = 0; k < NUM_PERROS + 1; k++)
     {
         pthread_join(hilos[k], NULL);
+        if (tablero->ganador == "")
+        {
+            tablero->ganador = "Ninguno (interrumpida)";
+        }
     }
 
     escribir(*tablero, "Fin de la partida. Ganador: " + tablero->ganador + ". Perros capturados: " + to_string(tablero->capturados));
@@ -448,6 +460,11 @@ bool esperarSem(sem_t *sem)
     return false;
 }
 
+void manejar_sigint(int)
+{
+    cortar = 1;
+}
+
 int main(int argc, char *argv[])
 {
     if (argc < 3)
@@ -472,11 +489,13 @@ int main(int argc, char *argv[])
     cout << "mesas: " << mesas << endl;
     cout << "espera: " << espera_min << " a " << espera_max << " ms" << endl;
     cout << "semilla: " << semilla << endl;
+
+    signal(SIGINT, manejar_sigint);
+
     sem_init(&sem_mesas, 0, mesas);
     sem_init(&sem_pumas, 0, 0);
     sem_init(&sem_perros, 0, 0);
 
-    // llegan los clientes
     vector<pthread_t> hilos_clientes(jugadores);
     vector<Cliente> clientes(jugadores);
     for (int k = 0; k < jugadores; k++)
@@ -486,7 +505,6 @@ int main(int argc, char *argv[])
         pthread_create(&hilos_clientes[k], NULL, hiloCliente, &clientes[k]);
     }
 
-    // matchmaker: arma parejas y les da una mesa
     int parejas = jugadores / 2;
     vector<Tablero> tableros(parejas);
     vector<pthread_t> jueces(parejas);
@@ -506,7 +524,6 @@ int main(int argc, char *argv[])
         creadas++;
     }
 
-    // esperar que termine todo
     for (int p = 0; p < creadas; p++)
     {
         pthread_join(jueces[p], NULL);
@@ -521,6 +538,13 @@ int main(int argc, char *argv[])
     sem_destroy(&sem_perros);
     pthread_mutex_destroy(&candado_pantalla);
 
-    cout << "Torneo terminado" << endl;
+    if (cortar)
+    {
+        cout << "Torneo interrumpido con Ctrl+C. Recursos liberados." << endl;
+    }
+    else
+    {
+        cout << "Torneo terminado" << endl;
+    }
     return 0;
 }
